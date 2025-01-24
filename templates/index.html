@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Xbox Controller Viewer v2</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .controller-container {
+            width: 400px;
+            height: 300px;
+            border: 2px solid #333;
+            margin: 20px auto;
+            position: relative;
+            background-color: #f0f0f0;
+        }
+
+        .button {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background-color: #ddd;
+            border: 2px solid #333;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+
+        .button.active {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        .stick {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #666;
+            border: 2px solid #333;
+        }
+
+        #controls {
+            text-align: center;
+            margin: 20px;
+        }
+
+        #start-stop {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+
+        #start-stop:hover {
+            background-color: #45a049;
+        }
+
+        #debug-output {
+            margin: 20px auto;
+            padding: 15px;
+            border: 2px solid #666;
+            border-radius: 5px;
+            background-color: #f8f8f8;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        #debug-output h3 {
+            margin-top: 0;
+            color: #333;
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 10px;
+        }
+
+        #events-log {
+            height: 200px;
+            overflow-y: auto;
+            background-color: #fff;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            font-family: monospace;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        .status-message {
+            color: #666;
+            font-style: italic;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js?v=2"></script>
+</head>
+<body>
+    <h1 style="text-align: center;">Xbox Controller Viewer</h1>
+    
+    <div id="controls">
+        <button id="start-stop">Start Controller</button>
+    </div>
+
+    <div class="controller-container" id="controller">
+        <div id="BTN_SOUTH" class="button" style="left: 300px; top: 150px;">A</div>
+        <div id="BTN_EAST" class="button" style="left: 340px; top: 150px;">B</div>
+        <div id="BTN_NORTH" class="button" style="left: 320px; top: 110px;">Y</div>
+        <div id="BTN_WEST" class="button" style="left: 280px; top: 130px;">X</div>
+    </div>
+    
+    <div id="debug-output">
+        <h3>Controller Events:</h3>
+        <div id="events-log"></div>
+    </div>
+
+    <script>
+        const socket = io();
+        let isRunning = false;
+        const startStopButton = document.getElementById('start-stop');
+        const eventsLog = document.getElementById('events-log');
+        
+        function logEvent(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            eventsLog.insertBefore(logEntry, eventsLog.firstChild);
+            
+            // Keep only the last 50 messages
+            while (eventsLog.children.length > 50) {
+                eventsLog.removeChild(eventsLog.lastChild);
+            }
+        }
+
+        startStopButton.addEventListener('click', () => {
+            if (!isRunning) {
+                socket.emit('start_controller');
+                startStopButton.textContent = 'Stop Controller';
+                startStopButton.style.backgroundColor = '#ff4444';
+                isRunning = true;
+                logEvent('Starting controller monitoring...');
+            } else {
+                socket.emit('stop_controller');
+                startStopButton.textContent = 'Start Controller';
+                startStopButton.style.backgroundColor = '#4CAF50';
+                isRunning = false;
+                logEvent('Stopping controller monitoring...');
+            }
+        });
+
+        socket.on('connect', () => {
+            logEvent('Connected to server');
+        });
+
+        socket.on('disconnect', () => {
+            logEvent('Disconnected from server');
+        });
+
+        socket.on('controller_event', (data) => {
+            logEvent(`Event: ${data.code} - State: ${data.state} - Type: ${data.type}`);
+            updateControllerView(data);
+        });
+
+        function updateControllerView(data) {
+            const element = document.getElementById(data.code);
+            if (element) {
+                if (data.type === 'Key') {
+                    element.classList.toggle('active', data.state === 1);
+                } else if (data.type === 'Absolute') {
+                    const value = data.state / 32768;
+                    logEvent(`Analog input: ${data.code} - Value: ${value}`);
+                }
+            }
+        }
+
+        // Add initial status message
+        logEvent('Waiting for controller events... Click "Start Controller" to begin.');
+    </script>
+</body>
+</html> 
