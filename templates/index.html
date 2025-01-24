@@ -11,18 +11,19 @@
         }
 
         .controller-container {
-            width: 400px;
-            height: 300px;
+            width: 600px;
+            height: 400px;
             border: 2px solid #333;
             margin: 20px auto;
             position: relative;
-            background-color: #f0f0f0;
+            background-color: #2c2c2c;
+            border-radius: 150px 150px 50px 50px;
         }
 
         .button {
             position: absolute;
-            width: 30px;
-            height: 30px;
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
             background-color: #ddd;
             border: 2px solid #333;
@@ -30,20 +31,113 @@
             align-items: center;
             justify-content: center;
             font-weight: bold;
+            transition: all 0.1s;
         }
 
         .button.active {
-            background-color: #4CAF50;
+            transform: scale(0.9);
+            filter: brightness(1.2);
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
+
+        #BTN_SOUTH.active { /* A button active state */
+            background-color: #7de43a;
+        }
+
+        #BTN_EAST.active { /* B button active state */
+            background-color: #ff5555;
+        }
+
+        #BTN_WEST.active { /* Y button active state */
+            background-color: #ffd84d;  /* Brighter yellow */
+        }
+
+        #BTN_NORTH.active { /* X button active state */
+            background-color: #5a80ff;  /* Brighter blue */
+        }
+
+        /* Button group positioning */
+        .button-group {
+            position: absolute;
+            right: 100px;
+            top: 150px;
+            width: 120px;
+            height: 120px;
+        }
+
+        #BTN_SOUTH { /* A button */
+            bottom: 0;
+            left: 40px;
+            background-color: #5dc21e;
             color: white;
         }
 
-        .stick {
+        #BTN_EAST { /* B button */
+            right: 0;
+            top: 40px;
+            background-color: #d54141;
+            color: white;
+        }
+
+        #BTN_WEST { /* Y button */
+            top: 0;
+            left: 40px;
+            background-color: #f1c232;  /* Yellow */
+            color: white;
+        }
+
+        #BTN_NORTH { /* X button */
+            left: 0;
+            top: 40px;
+            background-color: #4169e1;  /* Blue */
+            color: white;
+        }
+
+        .stick-container {
             position: absolute;
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background-color: #444;
+            border: 2px solid #333;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: visible; /* Allow stick to move outside container */
+        }
+
+        .stick {
+            position: relative;
             width: 40px;
             height: 40px;
             border-radius: 50%;
             background-color: #666;
             border: 2px solid #333;
+            transition: transform 0.05s; /* Faster transition */
+            cursor: pointer;
+            transform-origin: center center;
+        }
+
+        .stick::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 8px;
+            height: 8px;
+            background-color: #888;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        #left-stick-container {
+            left: 100px;
+            top: 150px;
+        }
+
+        #right-stick-container {
+            right: 250px;
+            top: 150px;
         }
 
         #controls {
@@ -108,10 +202,23 @@
     </div>
 
     <div class="controller-container" id="controller">
-        <div id="BTN_SOUTH" class="button" style="left: 300px; top: 150px;">A</div>
-        <div id="BTN_EAST" class="button" style="left: 340px; top: 150px;">B</div>
-        <div id="BTN_NORTH" class="button" style="left: 320px; top: 110px;">Y</div>
-        <div id="BTN_WEST" class="button" style="left: 280px; top: 130px;">X</div>
+        <!-- Left stick -->
+        <div class="stick-container" id="left-stick-container">
+            <div class="stick" id="ABS_X_ABS_Y"></div>
+        </div>
+
+        <!-- Right stick -->
+        <div class="stick-container" id="right-stick-container">
+            <div class="stick" id="ABS_RX_ABS_RY"></div>
+        </div>
+
+        <!-- Button group -->
+        <div class="button-group">
+            <div id="BTN_SOUTH" class="button">A</div>
+            <div id="BTN_EAST" class="button">B</div>
+            <div id="BTN_WEST" class="button">Y</div>
+            <div id="BTN_NORTH" class="button">X</div>
+        </div>
     </div>
     
     <div id="debug-output">
@@ -125,6 +232,12 @@
         const startStopButton = document.getElementById('start-stop');
         const eventsLog = document.getElementById('events-log');
         
+        // Add these variables at the start of your script to track stick positions
+        const stickPositions = {
+            left: { x: 0, y: 0 },
+            right: { x: 0, y: 0 }
+        };
+
         function logEvent(message) {
             const timestamp = new Date().toLocaleTimeString();
             const logEntry = document.createElement('div');
@@ -161,22 +274,72 @@
             logEvent('Disconnected from server');
         });
 
+        function updateControllerView(data) {
+            if (data.type === 'Key') {
+                const button = document.getElementById(data.code);
+                if (button) {
+                    button.classList.toggle('active', data.state === 1);
+                }
+            } else if (data.type === 'Absolute') {
+                const value = data.state / 32768; // Normalize to [-1, 1]
+                
+                // Handle left stick
+                if (data.code === 'ABS_X' || data.code === 'ABS_Y') {
+                    const stick = document.getElementById('ABS_X_ABS_Y');
+                    if (stick) {
+                        // Update the appropriate position
+                        if (data.code === 'ABS_X') {
+                            stickPositions.left.x = value;
+                        } else if (data.code === 'ABS_Y') {
+                            stickPositions.left.y = value;
+                        }
+                        // Apply both X and Y transforms together
+                        stick.style.transform = `translate(${stickPositions.left.x * 30}px, ${stickPositions.left.y * 30}px)`;
+                    }
+                }
+                
+                // Handle right stick
+                if (data.code === 'ABS_RX' || data.code === 'ABS_RY') {
+                    const stick = document.getElementById('ABS_RX_ABS_RY');
+                    if (stick) {
+                        // Update the appropriate position
+                        if (data.code === 'ABS_RX') {
+                            stickPositions.right.x = value;
+                        } else if (data.code === 'ABS_RY') {
+                            stickPositions.right.y = value;
+                        }
+                        // Apply both X and Y transforms together
+                        stick.style.transform = `translate(${stickPositions.right.x * 30}px, ${stickPositions.right.y * 30}px)`;
+                    }
+                }
+                
+                logEvent(`Analog input: ${data.code} - Value: ${value.toFixed(2)}`);
+            }
+        }
+
         socket.on('controller_event', (data) => {
             logEvent(`Event: ${data.code} - State: ${data.state} - Type: ${data.type}`);
             updateControllerView(data);
         });
 
-        function updateControllerView(data) {
-            const element = document.getElementById(data.code);
-            if (element) {
-                if (data.type === 'Key') {
-                    element.classList.toggle('active', data.state === 1);
-                } else if (data.type === 'Absolute') {
-                    const value = data.state / 32768;
-                    logEvent(`Analog input: ${data.code} - Value: ${value}`);
-                }
+        // Update the stop_controller handler to reset positions
+        socket.on('stop_controller', () => {
+            const leftStick = document.getElementById('ABS_X_ABS_Y');
+            const rightStick = document.getElementById('ABS_RX_ABS_RY');
+            
+            // Reset stored positions
+            stickPositions.left = { x: 0, y: 0 };
+            stickPositions.right = { x: 0, y: 0 };
+            
+            // Reset stick positions
+            if (leftStick) {
+                leftStick.style.transform = 'translate(0, 0)';
             }
-        }
+            
+            if (rightStick) {
+                rightStick.style.transform = 'translate(0, 0)';
+            }
+        });
 
         // Add initial status message
         logEvent('Waiting for controller events... Click "Start Controller" to begin.');
